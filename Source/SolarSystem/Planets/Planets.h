@@ -21,6 +21,14 @@ public:
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visualization")
   UStaticMeshComponent* BodyMesh;
 
+  FVector GetVelocity() const { return Velocity; }
+  
+  void SetVelocity(const FVector& NewVelocity) { Velocity = NewVelocity; }
+  
+  void AddAcceleration(const FVector& Acceleration, float DeltaTime);
+  
+  void UpdatePosition(float DeltaTime);
+
 protected:
   virtual void BeginPlay() override;
 
