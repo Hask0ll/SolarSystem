@@ -14,10 +14,10 @@ APlanetsManager::APlanetsManager()
   OrbitLineThickness = 2.0f;
   OrbitRecordInterval = 0.1f;
   OrbitRecordTimer = 0.0f;
-  
-  bShowRelativeOrbits = false;
-  ReferencePlanet = nullptr;
-  ObservingPlanet = nullptr;
+
+  bShowOrbitPrediction = false;
+  MaxPredictionPoints = 200;
+  PredictionTimeStep = 0.5f;
 }
 
 void APlanetsManager::BeginPlay()
@@ -55,11 +55,11 @@ void APlanetsManager::Tick(float DeltaTime)
     }
     
     DrawOrbits();
-
-    if (bShowRelativeOrbits)
-    {
-      DrawRelativeOrbit();
-    }
+  }
+  if (bShowOrbitPrediction)
+  {
+    CalculateOrbitPrediction();
+    DrawOrbitPrediction();
   }
 }
 
@@ -195,44 +195,89 @@ void APlanetsManager::DrawOrbits()
   }
 }
 
-void APlanetsManager::DrawRelativeOrbit()
+void APlanetsManager::CalculateOrbitPrediction()
 {
-  if (!ReferencePlanet || !ObservingPlanet)
-    return;
-    
-  if (!OrbitHistory.Contains(ReferencePlanet) || !OrbitHistory.Contains(ObservingPlanet))
-    return;
-    
-  const TArray<FVector>& RefHistory = OrbitHistory[ReferencePlanet];
-  const TArray<FVector>& ObsHistory = OrbitHistory[ObservingPlanet];
+  OrbitPrediction.Empty();
   
-  int32 MinPoints = FMath::Min(RefHistory.Num(), ObsHistory.Num());
+  TMap<APlanets*, FVector> TempPositions;
+  TMap<APlanets*, FVector> TempVelocities;
   
-  if (MinPoints < 2)
-    return;
-    
-  for (int32 i = 0; i < MinPoints - 1; i++)
+  for (APlanets* Planet : Planets)
   {
-    FVector RelativePos1 = ObsHistory[i] - RefHistory[i];
-    FVector RelativePos2 = ObsHistory[i + 1] - RefHistory[i + 1];
+    TempPositions.Add(Planet, Planet->GetActorLocation());
+    TempVelocities.Add(Planet, Planet->GetVelocity());
+    OrbitPrediction.Add(Planet, TArray<FVector>());
+  }
+  
+  for (int32 Step = 0; Step < MaxPredictionPoints; Step++)
+  {
+    TMap<APlanets*, FVector> Forces;
+    for (APlanets* Planet : Planets)
+    {
+      FVector TotalForce = FVector::ZeroVector;
+      
+      for (APlanets* OtherPlanet : Planets)
+      {
+        if (OtherPlanet != Planet)
+        {
+          FVector Direction = TempPositions[OtherPlanet] - TempPositions[Planet];
+          float Distance = Direction.Size();
+          
+          if (Distance > 0.1f)
+          {
+            float ForceMagnitude = GravitationalConstant * (Planet->Mass * OtherPlanet->Mass) / (Distance * Distance);
+            FVector ForceDirection = Direction.GetSafeNormal();
+            TotalForce += ForceMagnitude * ForceDirection;
+          }
+        }
+      }
+      Forces.Add(Planet, TotalForce);
+    }
     
-    FVector RefCurrentPos = ReferencePlanet->GetActorLocation();
-    
-    DrawDebugLine(
-      GetWorld(),
-      RefCurrentPos + RelativePos1,
-      RefCurrentPos + RelativePos2,
-      FColor::Magenta,
-      false,
-      -1.0f,
-      0,
-      OrbitLineThickness * 1.5f
-    );
+    for (APlanets* Planet : Planets)
+    {
+      FVector Acceleration = Forces[Planet] / Planet->Mass;
+      TempVelocities[Planet] += Acceleration * PredictionTimeStep;
+      TempPositions[Planet] += TempVelocities[Planet] * PredictionTimeStep;
+      
+      OrbitPrediction[Planet].Add(TempPositions[Planet]);
+    }
   }
 }
 
-void APlanetsManager::ClearOrbitHistory()
+void APlanetsManager::DrawOrbitPrediction()
 {
-  OrbitHistory.Empty();
-  OrbitRecordTimer = 0.0f;
+  for (auto& Pair : OrbitPrediction)
+  {
+    APlanets* Planet = Pair.Key;
+    const TArray<FVector>& Prediction = Pair.Value;
+    
+    if (Prediction.Num() < 2)
+      continue;
+    
+    FColor PredictionColor = FColor::Orange;
+    int32 PlanetIndex = Planets.IndexOfByKey(Planet);
+    switch (PlanetIndex)
+    {
+    case 0: PredictionColor = FColor(255, 100, 100); break; // Rouge clair
+    case 1: PredictionColor = FColor(100, 100, 255); break; // Bleu clair
+    case 2: PredictionColor = FColor(100, 255, 100); break; // Vert clair
+    case 3: PredictionColor = FColor(255, 255, 100); break; // Jaune clair
+    default: PredictionColor = FColor::Orange; break;
+    }
+    
+    for (int32 i = 0; i < Prediction.Num() - 1; i++)
+    {
+      DrawDebugLine(
+        GetWorld(),
+        Prediction[i],
+        Prediction[i + 1],
+        PredictionColor,
+        false,
+        -1.0f,
+        0,
+        OrbitLineThickness * 0.5f
+      );
+    }
+  }
 }

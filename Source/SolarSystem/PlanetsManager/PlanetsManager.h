@@ -36,18 +36,15 @@ public:
   
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Orbit Visualization")
   float OrbitRecordInterval;
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Orbit Preview")
+  bool bShowOrbitPrediction;
   
-  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Orbit Visualization")
-  bool bShowRelativeOrbits;
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Orbit Preview", meta = (ClampMin = "10", ClampMax = "1000"))
+  int32 MaxPredictionPoints;
   
-  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Orbit Visualization")
-  APlanets* ReferencePlanet;
-  
-  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Orbit Visualization")
-  APlanets* ObservingPlanet;
-  
-  UFUNCTION(BlueprintCallable, Category = "Orbit Visualization")
-  void ClearOrbitHistory();
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Orbit Preview", meta = (ClampMin = "0.1", ClampMax = "10.0"))
+  float PredictionTimeStep;
 
 protected:
   virtual void BeginPlay() override;
@@ -63,8 +60,11 @@ private:
   
   void RecordOrbitPoints();
   void DrawOrbits();
-  void DrawRelativeOrbit();
+
+  void CalculateOrbitPrediction();
+  void DrawOrbitPrediction();
   
   TMap<APlanets*, TArray<FVector>> OrbitHistory;
+  TMap<APlanets*, TArray<FVector>> OrbitPrediction;
   float OrbitRecordTimer;
 };
